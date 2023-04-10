@@ -15,8 +15,6 @@ from ultralytics import YOLO
 
 OCR_MIN_PROB = 0.7
 MODEL_MIN_PROB = 0.25
-CONFIG = dotenv_values(".env")
-
 COLORS = [
     (255, 0, 0),    # blue
     (0, 255, 0),    # green
@@ -26,12 +24,10 @@ COLORS = [
     (255, 255, 0),  # cyan
 ]
 
-class BibReader(object):
+class Server(object):
 
     image_queue = []
-    bibs_list = ['613','384','467','610','681','614','673','611','580','520','558','687','620','669','441','433','1471','646','473','390','676','439','426','457','618','460','697','1465','507','649','491','493','694','627','637','489','600','1462','699','448','481','621','482','369','514','485','466','1460','630','193','675','395','375','672','560','459','1459','626','430','686','684','464','146','518','1469','452','355','854','855','354']
     track_dict = {}
-
     running = False
 
     def __init__(self):
@@ -41,6 +37,9 @@ class BibReader(object):
         # Init ocr
         self.reader = Reader(["fr"])
         self.bib_traker = Sort()
+        
+        self.config = dotenv_values(".env")
+        self.bibs_list = open('bibs.txt', 'r').read().split('\n')
 
     def cleanup_text(self, text):
         return "".join([c if ord(c) < 128 else "" for c in text]).strip()
@@ -50,7 +49,7 @@ class BibReader(object):
             self.track_dict[track_id] = {}
 
         # Use the OCR reader to read text from the cropped image
-        results = self.reader.readtext(cropped_image, canvas_size=200, min_size=50 ,text_threshold=OCR_MIN_PROB, link_threshold=0.3, low_text=0.3)
+        results = self.reader.readtext(cropped_image, canvas_size=200, min_size=30 ,text_threshold=OCR_MIN_PROB, link_threshold=0.3, low_text=0.3)
 
         # Loop over the OCR results
         for (bbox, text, prob) in results:
@@ -90,8 +89,7 @@ class BibReader(object):
             # Crop the original image to get the region of interest
             cropped_image = img[yA:yB, xA:xB]
 
-            # bib = self.process_bib(track_id, cropped_image)
-            bib = '0'
+            bib = self.process_bib(track_id, cropped_image)
 
             # draw rectangle on the image
             cv2.rectangle(img, (xA, yA), (xB, yB), COLORS[track_id%6], 3)
@@ -130,9 +128,7 @@ class BibReader(object):
         # thread.start()
         
         # Init camera
-        # cam = cv2.VideoCapture(CONFIG['SOURCE'])
-        cam = cv2.VideoCapture('benchmark.mp4')
-        cam.set(cv2.CAP_PROP_POS_FRAMES, 0*30)
+        cam = cv2.VideoCapture(self.config['SOURCE'])
 
         if cam.isOpened() == False:
             print("Error")
@@ -154,5 +150,5 @@ class BibReader(object):
             
 
 if __name__ == "__main__":
-    detector = BibReader()
-    detector.run()
+    reader = Server()
+    reader.run()
