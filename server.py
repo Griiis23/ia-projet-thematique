@@ -9,6 +9,7 @@ import Levenshtein
 from dotenv import dotenv_values
 from easyocr import Reader
 from datetime import datetime
+from datetime import timedelta
 from sort import Sort
 from ultralytics import YOLO
 
@@ -25,9 +26,6 @@ COLORS = [
 
 class Server(object):
 
-    image_queue = []
-    track_dict = {}
-
     def __init__(self):
         self.config = dotenv_values(".env")
         self.bibs_list = open('bibs.txt', 'r').read().split('\n')
@@ -39,15 +37,24 @@ class Server(object):
         self.reader = Reader(["fr"])
         self.bib_traker = Sort()
 
-        # Init queue
         self.queue = queue.Queue(QUEUE_MAX_SIZE)
+        self.lock = threading.Lock()
+        self.image_queue = []
+        self.track_dict = {}
 
     def cleanup_text(self, text):
         return "".join([c if ord(c) < 128 else "" for c in text]).strip()
 
-    def process_bib(self, track_id, cropped_image):
-        if track_id not in self.track_dict:
-            self.track_dict[track_id] = {}
+    def process_bib(self, track_id, cropped_image, img, date):
+        with self.lock:
+            if track_id not in self.track_dict:
+                self.track_dict[track_id] = {
+                    'matches': {},
+                    'first_image': np.copy(img),
+                    'first_image_date': date,
+                }
+        
+        self.track_dict[track_id]['latest_detection'] = datetime.now()
 
         # Use the OCR reader to read text from the cropped image
         results = self.reader.readtext(cropped_image, canvas_size=200, min_size=30 ,text_threshold=OCR_MIN_PROB, link_threshold=0.3, low_text=0.3)
@@ -58,24 +65,24 @@ class Server(object):
             text = self.cleanup_text(text)
 
             if text.isdigit():
-                # Find closest values in bib_list
+                # Find closest values in bibs_list
                 min_distance = min([Levenshtein.distance(text, x) for x in self.bibs_list])
-                closests = [x for x in self.bibs_list if Levenshtein.distance(text, x) <= min_distance]
+                matches = [x for x in self.bibs_list if Levenshtein.distance(text, x) <= min_distance]
 
-                # Add match in track_dict
-                for val in closests:
-                    if val not in self.track_dict[track_id]:
-                        self.track_dict[track_id][val] = 0
-                    self.track_dict[track_id][val] += prob
+                if len(matches) > 5:
+                    # If too many matches then ignore result
+                    continue
 
-        # If self.track_dict[track_id] is empty, return None
-        if not self.track_dict[track_id]:
-            return ''
-            
+                # Add matches in track_dict
+                for val in matches:
+                    if val not in self.track_dict[track_id]['matches']:
+                        self.track_dict[track_id]['matches'][val] = 0
+                    self.track_dict[track_id]['matches'][val] += prob
+        
         # Return the bib with highest score
-        return max(self.track_dict[track_id], key=self.track_dict[track_id].get)
+        return max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get)
 
-    def process_image(self, img):
+    def process_image(self, img, date):
         start_time = time.time()
         
         # Inference
@@ -90,8 +97,8 @@ class Server(object):
             # Crop the original image to get the region of interest
             cropped_image = img[yA:yB, xA:xB]
 
-            bib = self.process_bib(track_id, cropped_image)
-
+            bib = self.process_bib(track_id, cropped_image, img, date)
+            
             # draw rectangle on the image
             cv2.rectangle(img, (xA, yA), (xB, yB), COLORS[track_id%5], 3)
             
@@ -111,13 +118,13 @@ class Server(object):
     def process_images(self):
         while True:
             item = self.queue.get()
-            self.process_image(item['image'])
+            self.process_image(item['image'], item['date'])
             self.queue.task_done()
 
     def read_video(self):
         # Init camera
         cam = cv2.VideoCapture(self.config['SOURCE'])
-        
+
         if cam.isOpened() == False:
             print("Error")
 
@@ -133,14 +140,29 @@ class Server(object):
                 'date': datetime.now()
             })
 
+    def send_to_api(self):
+        while True:
+            time.sleep(10)
+            
+            ids = []
+            with self.lock:
+                for track_id in self.track_dict:
+                    if self.track_dict[track_id]['latest_detection'] < (datetime.now() - timedelta(seconds=10)):
+                        print(max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get))
+
+        
+
     def start(self):
         t1 = threading.Thread(target=self.read_video)
         t2 = threading.Thread(target=self.process_images)
+        t3 = threading.Thread(target=self.send_to_api)
 
         t1.start()
         t2.start()
+        t3.start()
         t1.join()
         t2.join()
+        t3.join()
             
 
 if __name__ == "__main__":
