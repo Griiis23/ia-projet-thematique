@@ -5,6 +5,10 @@ import queue
 import threading
 import numpy as np
 import Levenshtein
+import requests
+import json
+import calendar
+import base64
 
 from dotenv import dotenv_values
 from easyocr import Reader
@@ -29,6 +33,16 @@ class Server(object):
     def __init__(self):
         self.config = dotenv_values(".env")
         self.bibs_list = open('bibs.txt', 'r').read().split('\n')
+
+        try:
+            current_GMT = time.gmtime()
+            time_stamp = calendar.timegm(current_GMT)
+            r = requests.post("http://" + self.config['ADRESSE_API'] + ":" + self.config['PORT_API'] + "/course", data={"nom": self.config['NOM_COURSE'], 'timestamp': time_stamp})
+            self.id_course = json.loads(r.text)['id']
+            # self.path_api = json.loads(r.text)['path']
+        except:
+            print("Error : " + r.text)
+            exit()
 
         # Init model
         self.model = YOLO(self.config["MODEL"])
@@ -84,6 +98,7 @@ class Server(object):
 
     def process_image(self, img, date):
         start_time = time.time()
+        
         
         # Inference
         results = self.model(img, conf=MODEL_MIN_PROB)
@@ -141,16 +156,27 @@ class Server(object):
             })
 
     def send_to_api(self):
+        bibs_sent = []
         while True:
             time.sleep(10)
-            
-            ids = []
             with self.lock:
-                for track_id in self.track_dict:
+                for track_id in list(self.track_dict):
+                    # if last detection is 10 sec old
                     if self.track_dict[track_id]['latest_detection'] < (datetime.now() - timedelta(seconds=10)):
-                        print(max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get))
+                        bib_number = max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get)
 
-        
+                        if bib_number != '' and bib_number not in bibs_sent:
+                            # send to api
+                            bibs_sent.append(bib_number)
+
+                            # encode the image
+                            creation_date = self.track_dict[track_id]['first_image_date']
+                            _, buffer = cv2.imencode('.jpg', self.track_dict[track_id]['first_image'])
+                            base64_image = base64.b64encode(buffer).decode('utf-8')
+
+                            # Requête à l'API pour enregistrer le passage du coureur
+                            requests.post("http://" + self.config['ADRESSE_API'] + ":" + self.config['PORT_API'] + "/pointControle", data={"dossard": bib_number, "timestamp": creation_date, "distance": 5, "courseId": self.id_course, "image": base64_image}) 
+                        del self.track_dict[track_id]
 
     def start(self):
         t1 = threading.Thread(target=self.read_video)
