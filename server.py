@@ -65,10 +65,11 @@ class Server(object):
                 self.track_dict[track_id] = {
                     'matches': {},
                     'first_image': np.copy(img),
-                    'first_image_date': date,
+                    'creation_date': date,
                 }
         
-        self.track_dict[track_id]['latest_detection'] = datetime.now()
+        self.track_dict[track_id]['last_detection'] = datetime.now()
+        self.track_dict[track_id]['last_image'] = np.copy(img)
 
         # Use the OCR reader to read text from the cropped image
         results = self.reader.readtext(cropped_image, canvas_size=200, min_size=30 ,text_threshold=OCR_MIN_PROB, link_threshold=0.3, low_text=0.3)
@@ -162,7 +163,7 @@ class Server(object):
             with self.lock:
                 for track_id in list(self.track_dict):
                     # if last detection is 10 sec old
-                    if self.track_dict[track_id]['latest_detection'] < (datetime.now() - timedelta(seconds=10)):
+                    if self.track_dict[track_id]['last_detection'] < (datetime.now() - timedelta(seconds=10)):
                         bib_number = max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get)
 
                         if bib_number != '' and bib_number not in bibs_sent:
@@ -170,8 +171,8 @@ class Server(object):
                             bibs_sent.append(bib_number)
 
                             # encode the image
-                            creation_date = self.track_dict[track_id]['first_image_date']
-                            _, buffer = cv2.imencode('.jpg', self.track_dict[track_id]['first_image'])
+                            creation_date = self.track_dict[track_id]['creation_date']
+                            _, buffer = cv2.imencode('.jpg', self.track_dict[track_id]['last_image'])
                             base64_image = base64.b64encode(buffer).decode('utf-8')
 
                             # Requête à l'API pour enregistrer le passage du coureur
