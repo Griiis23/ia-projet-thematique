@@ -171,9 +171,9 @@ class Server(object):
                             bibs_sent.append(bib_number)
 
                             # encode the image
-                            creation_date = self.track_dict[track_id]['creation_date']
                             _, buffer = cv2.imencode('.jpg', self.track_dict[track_id]['last_image'])
                             base64_image = base64.b64encode(buffer).decode('utf-8')
+                            creation_date = int(self.track_dict[track_id]['creation_date'].timestamp())
 
                             # Requête à l'API pour enregistrer le passage du coureur
                             requests.post("http://" + self.config['ADRESSE_API'] + ":" + self.config['PORT_API'] + "/pointControle", data={"dossard": bib_number, "timestamp": creation_date, "distance": 5, "courseId": self.id_course, "image": base64_image}) 
