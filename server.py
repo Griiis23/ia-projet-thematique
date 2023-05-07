@@ -34,12 +34,12 @@ class Server(object):
         self.config = dotenv_values(".env")
         self.bibs_list = open('bibs.txt', 'r').read().split('\n')
 
+        # creation de la course sur API
         try:
             current_GMT = time.gmtime()
             time_stamp = calendar.timegm(current_GMT)
             r = requests.post("http://" + self.config['ADRESSE_API'] + ":" + self.config['PORT_API'] + "/course", data={"nom": self.config['NOM_COURSE'], 'timestamp': time_stamp})
             self.id_course = json.loads(r.text)['id']
-            # self.path_api = json.loads(r.text)['path']
         except:
             print("Error : " + r.text)
             exit()
@@ -176,7 +176,7 @@ class Server(object):
                             creation_date = int(self.track_dict[track_id]['creation_date'].timestamp())
 
                             # Requête à l'API pour enregistrer le passage du coureur
-                            requests.post("http://" + self.config['ADRESSE_API'] + ":" + self.config['PORT_API'] + "/pointControle", data={"dossard": bib_number, "timestamp": creation_date, "distance": 5, "courseId": self.id_course, "image": base64_image}) 
+                            requests.post("http://" + self.config['ADRESSE_API'] + ":" + self.config['PORT_API'] + "/pointControle", data={"dossard": bib_number, "timestamp": creation_date, "distance": self.config['KILOMETRE'], "courseId": self.id_course, "image": base64_image}) 
                         del self.track_dict[track_id]
 
     def start(self):
