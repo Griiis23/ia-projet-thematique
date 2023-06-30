@@ -100,6 +100,7 @@ class Server(object):
     def process_image(self, img, date):
         start_time = time.time()
         
+        img_copy = np.copy(img)
         
         # Inference
         results = self.model(img, conf=MODEL_MIN_PROB)
@@ -115,20 +116,22 @@ class Server(object):
 
             bib = self.process_bib(track_id, cropped_image, img, date)
             
+            
+
             # draw rectangle on the image
-            cv2.rectangle(img, (xA, yA), (xB, yB), COLORS[track_id%5], 3)
+            cv2.rectangle(img_copy, (xA, yA), (xB, yB), COLORS[track_id%5], 3)
             
             # draw text on the image 
             text = f'id {track_id} : {bib}'
             text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, thickness=3)
-            cv2.rectangle(img, (xA, yA - text_size[1]), (xA + text_size[0], yA), COLORS[track_id%5], -1)
-            cv2.putText(img, text, (xA, yA), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 3, cv2.LINE_AA)
+            cv2.rectangle(img_copy, (xA, yA - text_size[1]), (xA + text_size[0], yA), COLORS[track_id%5], -1)
+            cv2.putText(img_copy, text, (xA, yA), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 3, cv2.LINE_AA)
             
             
         end_time = time.time()
-        cv2.putText(img, f'{int(1/(end_time - start_time))} FPS', (10, 32), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3, cv2.LINE_AA)
+        cv2.putText(img_copy, f'{int(1/(end_time - start_time))} FPS', (10, 32), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3, cv2.LINE_AA)
 
-        cv2.imshow('result', cv2.resize(img, (1152,648)))
+        cv2.imshow('result', cv2.resize(img_copy, (1152,648)))
         cv2.waitKey(1)
 
     def process_images(self):
