@@ -68,34 +68,34 @@ class Server(object):
                     'creation_date': date,
                 }
         
-        self.track_dict[track_id]['last_detection'] = datetime.now()
-        self.track_dict[track_id]['last_image'] = np.copy(img)
+            self.track_dict[track_id]['last_detection'] = datetime.now()
+            self.track_dict[track_id]['last_image'] = np.copy(img)
 
-        # Use the OCR reader to read text from the cropped image
-        results = self.reader.readtext(cropped_image, canvas_size=200, min_size=30 ,text_threshold=OCR_MIN_PROB, link_threshold=0.3, low_text=0.3)
+            # Use the OCR reader to read text from the cropped image
+            results = self.reader.readtext(cropped_image, canvas_size=200, min_size=30 ,text_threshold=OCR_MIN_PROB, link_threshold=0.3, low_text=0.3)
 
-        # Loop over the OCR results
-        for (bbox, text, prob) in results:
-            # Clean up the text
-            text = self.cleanup_text(text)
+            # Loop over the OCR results
+            for (bbox, text, prob) in results:
+                # Clean up the text
+                text = self.cleanup_text(text)
 
-            if text.isdigit():
-                # Find closest values in bibs_list
-                min_distance = min([Levenshtein.distance(text, x) for x in self.bibs_list])
-                matches = [x for x in self.bibs_list if Levenshtein.distance(text, x) <= min_distance]
+                if text.isdigit():
+                    # Find closest values in bibs_list
+                    min_distance = min([Levenshtein.distance(text, x) for x in self.bibs_list])
+                    matches = [x for x in self.bibs_list if Levenshtein.distance(text, x) <= min_distance]
 
-                if len(matches) > 5:
-                    # If too many matches then ignore result
-                    continue
+                    if len(matches) > 5:
+                        # If too many matches then ignore result
+                        continue
 
-                # Add matches in track_dict
-                for val in matches:
-                    if val not in self.track_dict[track_id]['matches']:
-                        self.track_dict[track_id]['matches'][val] = 0
-                    self.track_dict[track_id]['matches'][val] += prob
-        
-        # Return the bib with highest score
-        return max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get)
+                    # Add matches in track_dict
+                    for val in matches:
+                        if val not in self.track_dict[track_id]['matches']:
+                            self.track_dict[track_id]['matches'][val] = 0
+                        self.track_dict[track_id]['matches'][val] += prob
+            
+            # Return the bib with highest score
+            return max(self.track_dict[track_id]['matches'], default='', key=self.track_dict[track_id]['matches'].get)
 
     def process_image(self, img, date):
         start_time = time.time()
@@ -115,8 +115,6 @@ class Server(object):
             cropped_image = img[yA:yB, xA:xB]
 
             bib = self.process_bib(track_id, cropped_image, img, date)
-            
-            
 
             # draw rectangle on the image
             cv2.rectangle(img_copy, (xA, yA), (xB, yB), COLORS[track_id%5], 3)
